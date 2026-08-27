@@ -1,3 +1,4 @@
+import { harnessBrand, normalizeHarnessId } from '@/lib/harnessBrands'
 import type { SeasonState } from '@/lib/season'
 import { addCalendarDays, calendarDateInTimeZone } from '@/lib/timeZone'
 
@@ -354,21 +355,6 @@ function cleanMix(value: string[] | null): string[] {
   )
 }
 
-const TOKEN_AGENT_LABELS: Record<string, string> = {
-  claude: 'Claude Code',
-  'claude-code': 'Claude Code',
-  codex: 'Codex',
-  'openai-codex': 'Codex',
-  cursor: 'Cursor',
-  gemini: 'Gemini CLI',
-  'gemini-cli': 'Gemini CLI',
-  copilot: 'GitHub Copilot',
-  'github-copilot': 'GitHub Copilot',
-  hermes: 'Hermes',
-  'hermes-agent': 'Hermes',
-  opencode: 'OpenCode',
-  'open-code': 'OpenCode'
-}
 
 /**
  * Agent collector IDs → the AI board's tool names, for attaching opt-in
@@ -390,7 +376,7 @@ export const AGENT_AI_TOOL_NAMES: Record<string, string> = {
 
 /** Canonical agent-id normalization shared with tokenAgentLabel. */
 export function normalizeAgentId(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s_]+/g, '-')
+  return normalizeHarnessId(value)
 }
 
 export function tokenAgentLabel(value: string | null): string | null {
@@ -399,7 +385,7 @@ export function tokenAgentLabel(value: string | null): string | null {
   const normalized = normalizeAgentId(value)
 
   return (
-    TOKEN_AGENT_LABELS[normalized] ??
+    harnessBrand(normalized)?.label ??
     normalized
       .split('-')
       .filter(Boolean)

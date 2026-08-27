@@ -1,5 +1,9 @@
+'use client'
+
+import { useState } from 'react'
 import { rampVar, type RampName, type RampStep } from '@/components/achievements/palette'
 import { ToolIcon } from '@/components/leaderboard/icons'
+import { harnessBrand, harnessImageSource } from '@/lib/harnessBrands'
 import { tokenAgentLabel } from '@/lib/tokenLeaderboard'
 
 const AGENT_ACCENTS: Record<string, { color: string; edge: string; surface: string }> = {
@@ -35,20 +39,25 @@ const AGENT_ACCENTS: Record<string, { color: string; edge: string; surface: stri
     edge: 'rgb(var(--lb-panel-edge) / 0.24)',
     surface:
       'linear-gradient(145deg, rgb(var(--lb-panel-edge) / 0.14), rgb(var(--lb-panel-edge) / 0.03))'
+  },
+  OpenCode: {
+    color: 'rgb(var(--z100))',
+    edge: 'rgb(var(--lb-panel-edge) / 0.24)',
+    surface: 'linear-gradient(145deg, rgb(var(--lb-panel-edge) / 0.13), rgb(var(--lb-panel-edge) / 0.03))'
+  },
+  Pi: {
+    color: 'rgb(var(--z100))',
+    edge: 'rgb(var(--lb-panel-edge) / 0.24)',
+    surface: 'linear-gradient(145deg, rgb(var(--lb-panel-edge) / 0.13), rgb(var(--lb-panel-edge) / 0.03))'
   }
-}
-
-/** Agents whose brand mark is a raster image (label → self-hosted /public
- * path) rather than an SVG glyph in icons.tsx. Checked before ToolIcon. */
-const AGENT_IMAGE_MARKS: Record<string, string> = {
-  Hermes: '/agents/hermes.png'
 }
 
 /** Brand glyph for a known label: image tile when the agent ships a raster
  * mark, otherwise the shared SVG ToolIcon (which monogram-falls-back). The
  * rounded clip keeps square avatar-style logos looking intentional. */
-function LabelMark({ label, size }: { label: string; size: number }) {
-  const src = AGENT_IMAGE_MARKS[label]
+function LabelMark({ agent, label, size }: { agent: string; label: string; size: number }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const src = harnessImageSource(harnessBrand(agent), failedSrc)
   if (!src) return <ToolIcon name={label} size={size} />
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -59,8 +68,9 @@ function LabelMark({ label, size }: { label: string; size: number }) {
       loading="lazy"
       width={size}
       height={size}
-      className="shrink-0 object-cover"
+      className="shrink-0 object-contain"
       style={{ borderRadius: Math.max(2, Math.round(size * 0.28)) }}
+      onError={() => setFailedSrc(src)}
     />
   )
 }
@@ -163,7 +173,7 @@ export function TokenAgentIcon({
         aria-hidden
       >
         {label ? (
-          <LabelMark label={label} size={size} />
+          <LabelMark agent={agent ?? label} label={label} size={size} />
         ) : showBrew ? (
           <MixedBrewGlyph size={size + 2} />
         ) : (
@@ -189,7 +199,7 @@ export function TokenAgentIcon({
       aria-label={label ?? fallbackTitle}
     >
       {label ? (
-        <LabelMark label={label} size={size} />
+        <LabelMark agent={agent ?? label} label={label} size={size} />
       ) : showBrew ? (
         <MixedBrewGlyph size={size + 4} />
       ) : (
