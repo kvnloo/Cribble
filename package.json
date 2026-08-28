@@ -15,6 +15,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "validate:agent-svgs": "node scripts/validate-agent-svgs.mjs public/agents/pi.svg public/agents/opencode.svg",
+    "test:migrations": "bash scripts/test-migrations.sh",
     "audit:prod": "npm audit --omit=dev",
     "check:workflows": "bash scripts/check-workflows.sh",
     "setup:polar": "vite-node scripts/setup-polar.ts",
