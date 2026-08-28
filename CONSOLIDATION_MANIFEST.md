@@ -10,7 +10,7 @@ This is the sole proposed base for subsequent Cribble feature work after indepen
 | Original PR | Original head | Consolidation commit(s) | Disposition | Reconstruction note |
 |---|---|---|---|---|
 | #76 | `8389ef4d8ceb18647b171a67b8340c773aed1e0b` | `58413ae75717967e8b69494ce4a27e51aed62976` | REPAIRED/RECONSTRUCTED | Already represented by the approved fork commit; exact Pi/OpenCode assets, provenance, validation and tests preserved. |
-| #73 | `159ade1d013171531aed9417ca890572533e014e` | `ec2f5440997dd8ba7f426eeafa87c05afb86b0ff` | REPAIRED/RECONSTRUCTED | Original 060-062 migrations renumbered monotonically to 062-064 after upstream occupied 060-061; zero-head and renamed-head harness retained. |
+| #73 | `159ade1d013171531aed9417ca890572533e014e` | `ec2f5440997dd8ba7f426eeafa87c05afb86b0ff`, `e11e8513d339400be058ccd6df89457fac9790cd` | REPAIRED/RECONSTRUCTED | Original 060-062 migrations renumbered monotonically to 062-064 after upstream occupied 060-061; zero-head and renamed-head harness retained. |
 | #70 | `e3d7d832e73d1e7f087e88a3dd8f5bfdf9065821` | `f233997864818cd4e111e1f5562b8751580215e7` | INCLUDED (rebased) | Orphaned welcome audio removed; contract test retained. |
 | #68 | `68135d234218d3c71f11c9a1f98e25ae9e0eb372` | `8f8fd486e5e3e745c971009c925af939cd3f5b78` | INCLUDED (rebased) | Public-signup/current-CI README premise remains valid. |
 | #66 | `bf4a0a027a31c063b335335b132279574a5d6378` | `0900dd9f05844113ef2e76485b79dcaca7381857` | INCLUDED (rebased) | Invite validation precedes affirmative framing. |
@@ -21,7 +21,7 @@ This is the sole proposed base for subsequent Cribble feature work after indepen
 | #55 | `7bb25ff6ae5745f1cd3105a5f9f3cd2c6382090f` | `af1521f1b63118219d6ef700387f0d4b42e39489` | INCLUDED (rebased) | Feedback launcher remains docked in desktop navigation rail. |
 | #52 | `5a4c2ddc1cfbc3487f656dd39b6b5dec125c71a5` | `27c63d04de4cc0558287405b1b16ff70188b12dd` | INCLUDED (rebased) | Anonymous visitors skip account-only requests across all touched clients. |
 | #49 | `41b3fe6c3a041c4ba5cf4d33110200d393dfc531` | `f6a6682a64db69274a7b64d3b4b98679e2704ab9` | INCLUDED (verbatim) | Unused UUID dependencies removed from manifest and lockfile. |
-| #48 | `c9af23affc7b175af6652cb892340e9849140460` | `33311bfe2255b2048a662ff004008168e5ddd7e3`, `b3da084567753da6830a985c667bd53cd47d5424` | REPAIRED/RECONSTRUCTED | Fail-closed intent plus atomic serialized database admission, durable rate state, HMAC network fingerprints, bounded retention, no raw IP/user-agent storage, no PII response, concurrency/outage tests. |
+| #48 | `c9af23affc7b175af6652cb892340e9849140460` | `33311bfe2255b2048a662ff004008168e5ddd7e3`, `b3da084567753da6830a985c667bd53cd47d5424`, `e11e8513d339400be058ccd6df89457fac9790cd` | REPAIRED/RECONSTRUCTED | Fail-closed intent plus atomic serialized database admission, durable rate state, HMAC network fingerprints, bounded retention, no raw IP/user-agent storage, no PII response, concurrency/outage tests. |
 
 ## Known blocker repairs
 
