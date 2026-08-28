@@ -500,8 +500,10 @@ describe('POST /api/agent/usage — storage and staleness', () => {
 
   it('skips an older snapshot without changing the existing row', async () => {
     addKey()
-    addUsage({ generatedAt: GENERATED_AT, inputTokens: 77 })
-    const older = payload({ generatedAt: '2026-08-21T23:30:00.000Z' })
+    const existingGeneratedAt = new Date().toISOString()
+    const olderGeneratedAt = new Date(Date.parse(existingGeneratedAt) - 30 * 60 * 1000).toISOString()
+    addUsage({ generatedAt: existingGeneratedAt, inputTokens: 77 })
+    const older = payload({ generatedAt: olderGeneratedAt })
 
     const response = await POST(request(older))
     const body = await response.json()
