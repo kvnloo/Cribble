@@ -10,7 +10,9 @@ CREATE TABLE public.users (
   status TEXT DEFAULT 'active',
   active_device_uuid UUID,
   last_extension_sync TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now(),
+  -- Canonical legacy head uses timestamp without time zone; migration 060
+  -- converts it with AT TIME ZONE and declares a timestamptz result.
+  created_at TIMESTAMP DEFAULT now(),
   last_login TIMESTAMPTZ
 );
 
@@ -40,7 +42,7 @@ CREATE TABLE public.admin_activity_log (
 
 CREATE TABLE public.waitlist (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
   ip_address TEXT,
   user_agent TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
