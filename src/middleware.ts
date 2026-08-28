@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { canonicalizeJoinPathname } from '@/lib/joinPath'
-import { isAllowedDuringLock, isSiteLocked } from '@/lib/siteLock'
+import { isAllowedDuringLock, isKnownSealedPage, isSiteLocked } from '@/lib/siteLock'
 
-export function middleware(request: NextRequest) {
+export function middleware(request: NextRequest): NextResponse
+export function middleware(
+  request: NextRequest
+): NextResponse | Response | Promise<NextResponse> {
   // Create response
   const response = NextResponse.next()
   const pathname = request.nextUrl.pathname
@@ -70,13 +73,30 @@ export function middleware(request: NextRequest) {
       return new NextResponse('Not found', { status: 404, headers: response.headers })
     }
 
+    // The lock is not a catch-all error boundary. Unknown page routes must
+    // continue into Next's global not-found boundary so they retain a real
+    // 404 status and ERR_404 copy rather than masquerading as maintenance.
+    const opensWithSession = isAllowedDuringLock(pathname, true)
+    if (!opensWithSession && !isKnownSealedPage(pathname)) {
+      return response
+    }
+
     // Locked sectors render a void screen in place — the URL is preserved
     // so the visitor knows where they are, and refreshing after launch
     // (or after signing in) lands on the real page. Sectors that a session
     // would open get the sign-in wall; everything else is under works.
     const url = request.nextUrl.clone()
-    url.pathname = isAllowedDuringLock(pathname, true) ? '/restricted' : '/maintenance'
+    url.pathname = opensWithSession ? '/restricted' : '/maintenance'
     return NextResponse.rewrite(url, { headers: response.headers })
+  }
+
+  // A profile page used to discover absence after the app shell had begun
+  // streaming, which commits HTTP 200 before notFound() can run. Resolve the
+  // public API contract at the edge and rewrite genuine absences to a small
+  // non-streaming 404 route. Outages pass through to the page's retry UI.
+  const profileMatch = /^\/u\/([^/]+)$/.exec(pathname)
+  if (profileMatch && request.method === 'GET') {
+    return resolveProfileResponse(request, profileMatch[1], response)
   }
 
   // Handle preflight requests
@@ -85,6 +105,29 @@ export function middleware(request: NextRequest) {
   }
 
   return response
+}
+
+async function resolveProfileResponse(
+  request: NextRequest,
+  encodedUsername: string,
+  passThrough: NextResponse
+) {
+  const profileUrl = request.nextUrl.clone()
+  profileUrl.pathname = `/api/profile/${encodedUsername}`
+  try {
+    const profileResponse = await fetch(profileUrl, {
+      headers: { cookie: request.headers.get('cookie') || '' },
+      cache: 'no-store'
+    })
+    if (profileResponse.status === 400 || profileResponse.status === 404) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/_profile-not-found'
+      return NextResponse.rewrite(url, { status: 404, headers: passThrough.headers })
+    }
+  } catch {
+    // The server page preserves the existing retry state for lookup outages.
+  }
+  return passThrough
 }
 
 export const config = {

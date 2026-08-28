@@ -94,6 +94,14 @@ describe('middleware site lock', () => {
     expect(rewriteTarget('/roadmap')).toBe('/maintenance')
   })
 
+  it('leaves unknown routes for the global 404 boundary while locked', () => {
+    vi.stubEnv('SITE_LOCKED', '1')
+
+    expect(rewriteTarget('/definitely-not-a-cribble-route')).toBeNull()
+    expect(rewriteTarget('/DEFINITELY-NOT-A-CRIBBLE-ROUTE')).toBeNull()
+    expect(middleware(request('/definitely-not-a-cribble-route')).status).toBe(200)
+  })
+
   it('keeps dashboard and settings APIs reachable while the app shell is session-gated', () => {
     vi.stubEnv('SITE_LOCKED', '1')
     // Pages are session-gated (below); the data lanes still need to answer
@@ -223,5 +231,39 @@ describe('middleware site lock', () => {
     expect(response.headers.get('location')).toBe('https://cribble.dev/join/CRIB-THDM-AVQZ')
     expect(response.headers.get('x-middleware-rewrite')).toBeNull()
     expect(response.headers.get('x-frame-options')).toBe('DENY')
+  })
+})
+
+describe('public profile HTTP semantics', () => {
+  beforeEach(() => {
+    vi.stubEnv('SITE_LOCKED', 'false')
+    vi.stubEnv('NEXT_PUBLIC_SITE_LOCKED', 'false')
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('rewrites a missing public profile with HTTP 404', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 404 })))
+    const response = await middleware(new NextRequest('https://cribble.dev/u/does-not-exist'))
+
+    expect(response.status).toBe(404)
+    expect(new URL(response.headers.get('x-middleware-rewrite')!).pathname).toBe('/_profile-not-found')
+  })
+
+  it('leaves valid profiles and backend outages on the profile route', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 503 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const valid = await middleware(new NextRequest('https://cribble.dev/u/ada'))
+    const outage = await middleware(new NextRequest('https://cribble.dev/u/outage'))
+    expect(valid.status).toBe(200)
+    expect(outage.status).toBe(200)
+    expect(valid.headers.get('x-middleware-rewrite')).toBeNull()
+    expect(outage.headers.get('x-middleware-rewrite')).toBeNull()
   })
 })
