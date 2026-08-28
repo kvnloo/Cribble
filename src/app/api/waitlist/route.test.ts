@@ -1,169 +1,82 @@
 import { NextRequest } from 'next/server'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }))
-
-vi.mock('@/lib/supabaseServer', () => ({
-  createServiceClient: () => ({ from: fromMock })
-}))
-
+const { rpc, from } = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }))
+vi.mock('@/lib/supabaseServer', () => ({ createServiceClient: () => ({ rpc, from }) }))
 import { GET, POST } from './route'
 
-function postRequest(body: string, ip = '203.0.113.1') {
-  return new NextRequest('https://cribble.dev/api/waitlist', {
-    method: 'POST',
-    body,
-    headers: {
-      'content-type': 'application/json',
-      'user-agent': 'Mozilla/5.0',
-      'x-forwarded-for': ip
-    }
-  })
-}
-
-function unavailableStorage() {
-  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://placeholder.supabase.co')
-  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'placeholder-service-role-key')
-}
-
-function configuredStorage() {
+function configured() {
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://project.supabase.co')
-  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-role-key')
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-key')
+  vi.stubEnv('WAITLIST_RATE_LIMIT_SECRET', 'test-only-secret')
 }
-
-function mockConfiguredInsert(result: { data: unknown; error: unknown }) {
-  const insertSelect = vi.fn().mockResolvedValue(result)
-  const insert = vi.fn(() => ({ select: insertSelect }))
-  const ipLookup = {
-    eq: vi.fn(() => ({
-      gte: vi.fn(() => ({ limit: vi.fn().mockResolvedValue({ data: [], error: null }) }))
-    }))
-  }
-  fromMock.mockReturnValue({
-    select: vi.fn(() => ipLookup),
-    insert
+function request(email = 'member@example.com', ip = '203.0.113.1', body?: string) {
+  return new NextRequest('https://cribble.dev/api/waitlist', {
+    method: 'POST', body: body ?? JSON.stringify({ email }),
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip }
   })
-  return { insert }
 }
 
 describe('public waitlist route', () => {
-  let logSpy: MockInstance
-  let errorSpy: MockInstance
+  beforeEach(() => { rpc.mockReset(); from.mockReset(); configured() })
+  afterEach(() => { vi.unstubAllEnvs() })
 
-  beforeEach(() => {
-    fromMock.mockReset()
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    logSpy.mockRestore()
-    errorSpy.mockRestore()
-    vi.unstubAllEnvs()
-  })
-
-  it('rejects malformed JSON as a bad request', async () => {
-    unavailableStorage()
-
-    const response = await POST(postRequest('{'))
-
-    expect(response.status).toBe(400)
-  })
-
-  it('validates email before checking unavailable storage', async () => {
-    unavailableStorage()
-    const email = 'not-an-email'
-
-    const response = await POST(postRequest(JSON.stringify({ email })))
-
-    expect(response.status).toBe(400)
-    expect(JSON.stringify(await response.json())).not.toContain(email)
-    expect(JSON.stringify([...logSpy.mock.calls, ...errorSpy.mock.calls])).not.toContain(email)
-  })
-
-  it('fails closed without logging or returning a submitted email when storage is unavailable', async () => {
-    unavailableStorage()
+  it('fails closed before accepting PII when durable admission is unconfigured', async () => {
+    vi.stubEnv('WAITLIST_RATE_LIMIT_SECRET', '')
     const email = 'private@example.com'
-
-    const response = await POST(postRequest(JSON.stringify({ email })))
-
+    const response = await POST(request(email))
     expect(response.status).toBe(503)
-    expect(response.headers.get('cache-control')).toContain('no-store')
-    expect(await response.json()).toEqual({ error: 'Service unavailable' })
-    expect(JSON.stringify([...logSpy.mock.calls, ...errorSpy.mock.calls])).not.toContain(email)
-    expect(fromMock).not.toHaveBeenCalled()
+    expect(JSON.stringify(await response.json())).not.toContain(email)
+    expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('does not fabricate a GET count when storage is unavailable', async () => {
-    unavailableStorage()
-
-    const response = await GET()
-
-    expect(response.status).toBe(503)
-    expect(response.headers.get('cache-control')).toContain('no-store')
-    expect(await response.json()).toEqual({ error: 'Service unavailable' })
-    expect(fromMock).not.toHaveBeenCalled()
+  it('rejects malformed JSON and disposable addresses before storage', async () => {
+    expect((await POST(request('', '', '{'))).status).toBe(400)
+    expect((await POST(request('x@mailinator.com'))).status).toBe(400)
+    expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('preserves configured-storage signup success', async () => {
-    configuredStorage()
-    const { insert } = mockConfiguredInsert({
-      data: [{ email: 'member@example.com' }],
-      error: null
-    })
-
-    const response = await POST(postRequest(
-      JSON.stringify({ email: 'member@example.com' }),
-      '203.0.113.2'
-    ))
-
+  it('returns no retained admission data and sends only normalized email plus HMAC fingerprint', async () => {
+    rpc.mockResolvedValue({ data: 'admitted', error: null })
+    const response = await POST(request('Member@Example.com', '203.0.113.9'))
     expect(response.status).toBe(201)
-    expect(insert).toHaveBeenCalledOnce()
-    await expect(response.json()).resolves.toEqual({
-      message: 'Successfully added to waitlist',
-      data: [{ email: 'member@example.com' }]
+    expect(await response.json()).toEqual({ message: 'Successfully added to waitlist' })
+    expect(rpc).toHaveBeenCalledWith('admit_waitlist', {
+      p_email: 'member@example.com',
+      p_ip_fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
     })
+    expect(JSON.stringify(rpc.mock.calls)).not.toContain('203.0.113.9')
   })
 
-  it('preserves duplicate-email handling', async () => {
-    configuredStorage()
-    mockConfiguredInsert({ data: null, error: { code: '23505' } })
-
-    const response = await POST(postRequest(
-      JSON.stringify({ email: 'duplicate@example.com' }),
-      '203.0.113.3'
-    ))
-
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({ error: 'Email already registered' })
-  })
-
-  it('preserves disposable-email rejection before database access', async () => {
-    configuredStorage()
-
-    const response = await POST(postRequest(
-      JSON.stringify({ email: 'throwaway@mailinator.com' }),
-      '203.0.113.4'
-    ))
-
-    expect(response.status).toBe(400)
-    expect(fromMock).not.toHaveBeenCalled()
-  })
-
-  it('preserves the per-IP rate limit', async () => {
-    configuredStorage()
-    mockConfiguredInsert({ data: [{ email: 'member@example.com' }], error: null })
-    const ip = '203.0.113.5'
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const response = await POST(postRequest(
-        JSON.stringify({ email: `member${attempt}@example.com` }),
-        ip
-      ))
-      expect(response.status).toBe(201)
-    }
-    const limited = await POST(postRequest(JSON.stringify({ email: 'fourth@example.com' }), ip))
-
+  it('maps durable atomic duplicate and rate decisions without leaking PII', async () => {
+    rpc.mockResolvedValueOnce({ data: 'duplicate', error: null })
+      .mockResolvedValueOnce({ data: 'rate_limited', error: null })
+    expect((await POST(request('same@example.com'))).status).toBe(409)
+    const limited = await POST(request('other@example.com'))
     expect(limited.status).toBe(429)
+    expect(JSON.stringify(await limited.json())).not.toContain('other@example.com')
+  })
+
+  it('fails closed on storage outage', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: '08006' } })
+    const response = await POST(request())
+    expect(response.status).toBe(503)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('delegates concurrent admissions to the single atomic database RPC', async () => {
+    rpc.mockResolvedValueOnce({ data: 'admitted', error: null })
+      .mockResolvedValueOnce({ data: 'daily_limited', error: null })
+    const [first, second] = await Promise.all([
+      POST(request('first@example.com', '198.51.100.5')),
+      POST(request('second@example.com', '198.51.100.5'))
+    ])
+    expect([first.status, second.status].sort()).toEqual([201, 429])
+    expect(rpc).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns an exact count only when storage succeeds', async () => {
+    from.mockReturnValue({ select: vi.fn().mockResolvedValue({ count: 7, error: null }) })
+    await expect((await GET()).json()).resolves.toEqual({ count: 7 })
   })
 })
